@@ -10,7 +10,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Launch LocalStack
+      - name: Ensure no old LocalStack is running
+        run: |
+          docker rm -f localstack 2>/dev/null || true
+
+      - name: Launch LocalStack (v3)
         run: |
           docker run -d --name localstack \
             -p 4566:4566 \
