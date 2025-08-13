@@ -1,0 +1,67 @@
+name: Cloud Compliance (LocalStack Demo)
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - ".github/workflows/compliance.yml"
+      - "scanner/**"
+
+jobs:
+  local-compliance:
+    runs-on: ubuntu-latest
+
+    services:
+      localstack:
+        image: localstack/localstack:3
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: s3,ec2,iam,rds
+          DEBUG: 0
+        options: >-
+          --health-cmd="curl -s http://localhost:4566/_localstack/health | jq -e '.services | to_entries | map(select(.value == \"running\")) | length >= 3'"
+          --health-interval=5s
+          --health-start-period=20s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scanner/requirements.txt
+
+      - name: Seed LocalStack with demo resources
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+          AWS_ENDPOINT_URL: http://localhost:4566
+        run: |
+          python scanner/seed_localstack.py
+
+      - name: Run compliance scanner (LocalStack)
+        env:
+          MOCK_MODE: localstack
+          AWS_REGION: us-east-1
+          AWS_ENDPOINT_URL: http://localhost:4566
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+        run: |
+          python scanner/scan.py
+
+      - name: Upload compliance reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-reports
+          path: |
+            reports/*.md
+            reports/*.json
