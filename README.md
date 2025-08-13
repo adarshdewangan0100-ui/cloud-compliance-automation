@@ -1,52 +1,63 @@
 # cloud-compliance-automation
 
-# Context
-The org needed to operationalize security checks mapped to common controls (e.g., C5/NIST-like), with evidence for audits.
+I’ve built a lightweight cloud compliance pipeline that runs in GitHub Actions and produces a clear report of common AWS risks. It checks things like public S3 access, missing default encryption, open Security Groups, old IAM keys, unencrypted EBS/RDS, CloudTrail/GuardDuty status, and ECR tag immutability.
+The workflow can run in a demo mode (no credentials), against a sandbox (LocalStack), or in your AWS account using a read-only IAM role. You get both a human-readable Markdown report and a JSON file that can feed dashboards or tickets.
 
-# Problem
+What the report shows
+Summary: total findings by category
 
-Manual security checks were inconsistent.
+S3: buckets with public ACL/policy; buckets missing default encryption
 
-No central view of violations across accounts.
+Network: Security Groups with 0.0.0.0/0 on risky ports (22/3389/80/443)
 
-Vulnerable images reached staging.
+IAM: access keys older than policy (e.g., 90 days)
 
-# Constraints
+Storage & DB: EBS and RDS volumes/instances without encryption
 
-Work across multiple AWS accounts.
+Audit & Threat: CloudTrail/ GuardDuty not enabled
 
-Produce simple evidence for auditors.
+Container Registry: ECR repositories that allow mutable tags
 
-Minimal friction for dev teams.
+Each item includes the resource id + a plain-English description so remediation is obvious.
 
-# Solution
+How it runs (options)
+Demo mode (what you saw today): zero credentials, generates realistic sample findings to preview the workflow and report format.
 
-Built a Python CLI to scan AWS (boto3) for misconfigs: public S3, wide-open SGs, old IAM keys, unencrypted EBS/RDS.
+LocalStack mode: runs against an AWS emulator (no cloud costs) for a fuller end-to-end demo.
 
-Added container image scanning (Trivy) to CI with policy gates.
+Real AWS mode (recommended for assessments): runs in your account with a read-only IAM role (ideally via GitHub OIDC, so no static keys). Nothing leaves your account—artifacts are stored in your repo.
 
-Generated HTML/Markdown compliance reports with pass/fail and remediation steps.
+Deliverables I provide
+GitHub repo with the workflow + scanner, wired for your environment
 
-Scheduled runs; alerts to Slack on critical findings.
+A baseline compliance report (MD + JSON) and a prioritized remediation plan
 
-# Architecture (high level)
-Scheduler → Python scanners (AWS APIs) + CI image scans → Findings DB/JSON → Report generator → Slack/email & artifact uploads.
+(Optional) Implementation of fixes: S3 encryption, SG lockdown, enable CloudTrail/GuardDuty, ECR tag immutability, key rotation, etc.
 
-# Outcomes (measurable)
+(Optional) Quality-of-life add-ons: Slack/Email alerts, scheduled runs, severity scoring, ticket auto-creation, Trivy container scans, policy-as-code (e.g., OPA/Conftest).
 
-🧯 High-risk misconfigs reduced by >70% in 4 weeks.
+Engagement steps
+20–30 min setup call
 
-📜 Audit evidence generated on demand.
+I create a minimal read-only IAM role (or use your existing one)
 
-🚫 Vulnerable images blocked pre-deploy.
+Run baseline scan → deliver the report
 
-# My Role
-Defined controls, wrote scanners, integrated Trivy gates, built reporting, aligned with engineering leads.
+Walkthrough (30–45 min) with quick wins & risk ranking
 
-Artifacts to show
+Remediation sprint(s) and re-scan to show risk reduction
 
-Sample compliance report (HTML/MD)
+Costs & security
+No costs for demo/LocalStack.
 
-Trivy pipeline gate screenshot
+For real runs, cloud costs are minimal and billed to your AWS account.
 
-CLI help output & example JSON
+Access is read-only, preferably via OIDC (no long-lived secrets).
+
+If you want, I can also:
+
+add a summary table with severity badges at the top of the Markdown report (looks great in screenshots), and
+
+include a Trivy image scan job for ECR images.
+
+Say the word and I’ll drop those upgrades into your repo next.
