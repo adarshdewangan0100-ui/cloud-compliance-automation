@@ -1,0 +1,64 @@
+name: Cloud Compliance (LocalStack)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure no old LocalStack
+        run: docker rm -f localstack 2>/dev/null || true
+
+      - name: Launch LocalStack (stable)
+        run: |
+          docker run -d --name localstack \
+            -p 4566:4566 \
+            -e SERVICES="s3,ec2,iam,rds,ecr,cloudtrail,guardduty" \
+            localstack/localstack:stable
+          echo "Waiting for LocalStack..."
+          for i in {1..60}; do
+            out="$(curl -fsS http://localhost:4566/_localstack/health || true)"
+            echo "$out"
+            echo "$out" | grep -q '"running"' && break
+            sleep 5
+          done
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scanner/requirements.txt
+
+      - name: Seed LocalStack
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+          AWS_ENDPOINT_URL: http://localhost:4566
+        run: python scanner/seed_localstack.py
+
+      - name: Run scanner (LocalStack)
+        env:
+          MOCK_MODE: localstack
+          AWS_REGION: us-east-1
+          AWS_ENDPOINT_URL: http://localhost:4566
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+        run: python scanner/scan.py
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-reports-localstack
+          path: |
+            reports/*.md
+            reports/*.json
+
+      - name: Teardown
+        if: always()
+        run: docker rm -f localstack || true
